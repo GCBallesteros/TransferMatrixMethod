@@ -2,6 +2,9 @@ import numpy as np
 
 
 def _T_interface(ni, nj, cos_i, cos_j, pol):
+    T_interface = np.zeros((2, 2, len(ni)), dtype=np.complex64)
+    T_interface[0, 0, :] = 1
+    T_interface[1, 1, :] = 1
     if pol == "s":
         rij = (ni * cos_i - nj * cos_j) / (ni * cos_i + nj * cos_j)
         tij = 1 + rij
@@ -9,7 +12,10 @@ def _T_interface(ni, nj, cos_i, cos_j, pol):
         rij = (nj * cos_i - ni * cos_j) / (nj * cos_i + ni * cos_j)
         tij = (1 + rij) * (ni / nj)
 
-    return np.array([[1, rij], [rij, 1]]) / tij
+    T_interface[0, 1] = rij
+    T_interface[1, 0] = rij
+    T_interface = T_interface / tij
+    return T_interface
 
 
 def _T_propagation(phase):
@@ -30,7 +36,9 @@ def multilayer_response(pol, t_layers, index_layers, freq, theta_in):
       t_layers: Thickness of layers including exterior infinite media.
                 The exterior layer thickness is irrelevant.
       index_layers: Index of refraction of all layers. Includes exterior
-                    semiinfinite media.
+                    semiinfinite media. Besides a number it can also be
+                    supplied as a function that computes the index as
+                    a function of 1/lambda.
       freq: Frequency in Meep units, i.e. f = 1/lambda
       theta_in: Angle of incidence
 
@@ -46,6 +54,15 @@ def multilayer_response(pol, t_layers, index_layers, freq, theta_in):
     # the propagation matrix to be the identity
     t_layers[0] = 0
     t_layers[-1] = 0
+
+    # We also admit functions that compute the index as a function of frequency
+    # so we must check if we have a function or just a number and then generate
+    # the indices of refraction for each wavelength accordingly
+    for layer_idx, index in enumerate(index_layers):
+        if callable(index):
+            index_layers[layer_idx] = index(freq).astype(np.complex64)
+        else:
+            index_layers[layer_idx] = index * np.ones(len(freq), dtype=np.complex64)
 
     index_layers = np.asarray(index_layers)
     t_layers = np.asarray(t_layers)
@@ -80,7 +97,7 @@ def multilayer_response(pol, t_layers, index_layers, freq, theta_in):
         # Update system transfer matrix
         # We want matrix products of matrices at the same frequencies but not cross
         # information across frequencies hence the complicated einsums
-        T = np.einsum("ijk,jhk->ihk", T, np.einsum("ijk,jh->ihk", T_prop, T_ij))
+        T = np.einsum("ijk,jhk->ihk", T, np.einsum("ijk,jhk->ihk", T_prop, T_ij))
 
     R = np.abs(T[0, 1] / T[0, 0]) ** 2
     T = power_factor * np.abs(1.0 / T[0, 0]) ** 2
@@ -95,15 +112,21 @@ if __name__ == "__main__":
     matplotlib.rcParams["backend"] = "TkAgg"
     import matplotlib.pyplot as plt
 
-    n_Si = 3.5
-    n_SiO2 = 1.5
+    # Completely made up functions for wavelength dependence of index of
+    # refraction
+    def n_Si(wavelength):
+        return 3.5 + wavelength * 0.01
+
+    def n_SiO2(wavelength):
+        return 1.5-0.1j + wavelength * 0.01
+
+    lambda_min = 400
+    lambda_max = 1000
+    wavelengths = np.linspace(lambda_min, lambda_max, 400)
+    freq = 1.0 / wavelengths[::-1]
 
     index_layers = [1, n_SiO2, n_Si]
     t_layers = [0, 220, 0]
-
-    lambda_max = 400
-    lambda_min = 1000
-    freq = 1.0 / np.linspace(lambda_min, lambda_max, 400)
 
     (theory_reflection, theory_transmission) = multilayer_response(
         "s", t_layers, index_layers, freq, 0 * np.pi / 180
