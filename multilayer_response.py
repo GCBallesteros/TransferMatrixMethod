@@ -13,8 +13,11 @@ def _T_interface(ni, nj, cos_i, cos_j, pol):
 
 
 def _T_propagation(phase):
-    return np.array([[np.exp(-1j * phase), 0],
-                     [0, np.exp(1j * phase)]])
+    prop_matrix = np.zeros((2,2,len(phase)), dtype=np.complex64)
+    prop_matrix[0,0,:] = np.exp(-1j * phase)
+    prop_matrix[1,1,:] = np.exp(1j * phase)
+
+    return prop_matrix
 
 
 def multilayer_response(pol, t_layers, index_layers, freq, theta_in):
@@ -56,7 +59,11 @@ def multilayer_response(pol, t_layers, index_layers, freq, theta_in):
     power_factor = (index_layers[-1]/index_layers[0]) *\
                    (cos_thetas[-1]/cos_thetas[0])
     
-    T = np.eye(2)
+    # Create total transfer matrix for all frequencies
+    T = np.zeros((2, 2, len(freq)), dtype=np.complex64)
+    T[0,0,:] = 1
+    T[1,1,:] = 1
+
     for ii in np.arange(0, n_layers-1):
         # Compute propagation matrix
         phase_prop = 2 * np.pi * freq * t_layers[ii] * index_layers[ii] * cos_thetas[ii]
@@ -70,7 +77,9 @@ def multilayer_response(pol, t_layers, index_layers, freq, theta_in):
         T_ij = _T_interface(n1, n2, cos_1, cos_2, pol)
         
         # Update system transfer matrix
-        T = np.dot(T, np.dot(T_prop, T_ij))
+        # We want matrix products of matrices at the same frequencies but not cross
+        # information across frequencies hence the complicated einsums
+        T = np.einsum("ijk,jhk->ihk", T, np.einsum("ijk,jh->ihk", T_prop, T_ij))
     
     R = np.abs(T[0, 1]/T[0, 0])**2
     T =  power_factor * np.abs(1./T[0, 0])**2
