@@ -118,7 +118,7 @@ if __name__ == "__main__":
         return 3.5 + wavelength * 0.01
 
     def n_SiO2(wavelength):
-        return 1.5-0.1j + wavelength * 0.01
+        return 1.5 - 0.1j + wavelength * 0.01
 
     lambda_min = 400
     lambda_max = 1000

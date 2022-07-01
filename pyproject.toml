@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "transfermatrixmethod"
+version = "0.1.0"
+description = "Calculate the optical transmission and reflectance of a multilayer structure."
+authors = ["Guillem Ballesteros <guillem@kuvaspace.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+numpy = "^1.23.0"
+
+[tool.poetry.dev-dependencies]
+black = "^22.6.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
